@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head><title>Space Dodger</title></head>
+<body style="margin:0;background:#000;display:grid;place-items:center;height:100vh">
+<canvas id="c" width="400" height="600"></canvas>
+<script>
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+
+// --- State ---
+let ship = { x: 180, y: 550, w: 40, h: 40 };
+let obstacles = [];
+let score = 0;
+let keys = {};
+
+// --- Input ---
+addEventListener('keydown', e => keys[e.key] = true);
+addEventListener('keyup',   e => keys[e.key] = false);
+
+// --- Spawn obstacles ---
+function spawn() {
+  obstacles.push({
+    x: Math.random() * (c.width - 30),
+    y: -30,
+    size: 20 + Math.random() * 20,
+    speed: 2 + Math.random() * 3
+  });
+  setTimeout(spawn, 400 + Math.random() * 600);
+}
+spawn();
+
+// --- Collision check ---
+function hit(a, b) {
+  return a.x < b.x + b.size && a.x + a.w > b.x &&
+         a.y < b.y + b.size && a.y + a.h > b.y;
+}
+
+// --- Game loop ---
+function loop() {
+  ctx.clearRect(0, 0, c.width, c.height);
+
+  // Move ship
+  if (keys['ArrowLeft'])  ship.x = Math.max(0, ship.x - 6);
+  if (keys['ArrowRight']) ship.x = Math.min(c.width - ship.w, ship.x + 6);
+
+  // Draw ship (simple triangle)
+  ctx.fillStyle = '#0f0';
+  ctx.beginPath();
+  ctx.moveTo(ship.x + ship.w/2, ship.y);
+  ctx.lineTo(ship.x, ship.y + ship.h);
+  ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
+  ctx.fill();
+
+  // Update & draw obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const o = obstacles[i];
+    o.y += o.speed;
+
+    ctx.fillStyle = '#f55';
+    ctx.fillRect(o.x, o.y, o.size, o.size);
+
+    // Collision → game over
+    if (hit(ship, o)) {
+      ctx.fillStyle = '#fff'; ctx.font = '24px monospace';
+      ctx.fillText('GAME OVER  Score: ' + score, 50, 280);
+      return; // stop loop
+    }
+
+    // Score + remove off-screen
+    if (o.y > c.height) { score++; obstacles.splice(i, 1); }
+  }
+
+  // Score
+  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+  ctx.fillText('Score: ' + score, 10, 24);
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>   

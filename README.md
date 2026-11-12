@@ -1,5 +1,17 @@
-# Vanilla JS Space Dodger
+# Space Dodger
 
-A 2D space dodger built with vanilla JS + Canvas.
+2D dodge + shoot on Canvas. No dependencies.
 
-🎮 [Play it](https://enfren.github.io/vanilla-js-space-dodger/)
+## Controls
+- **← / →** — move
+- **Space** — fire
+- **R** — restart (after game over)
+
+## Scoring
+- Destroy obstacles for points (small = 1, medium = 2, big = 3)
+- Obstacles that escape off-screen give no points
+
+## v2
+- Shooting with cooldown
+- HP system (obstacles flash white when damaged)
+- Sized obstacles with different speeds

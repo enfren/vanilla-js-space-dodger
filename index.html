@@ -1,81 +1,177 @@
-<!DOCTYPE html>
+<!DOCTYPE html> <!-- Declares this as an HTML5 document -->
 <html>
-<head><title>Space Dodger</title></head>
+<head>
+  <title>Space Dodger v2</title> <!-- Page title shown in browser tab -->
+</head>
+<!-- Body styled to center the canvas on a black background, filling the viewport -->
 <body style="margin:0;background:#000;display:grid;place-items:center;height:100vh">
-<canvas id="c" width="400" height="600"></canvas>
-<script>
-const c = document.getElementById('c'), ctx = c.getContext('2d');
+  <!-- Canvas element: 400px wide, 600px tall drawing surface -->
+  <canvas id="c" width="400" height="600"></canvas>
+  <script>
+    // Get the canvas element and its 2D drawing context
+    const c = document.getElementById('c'), ctx = c.getContext('2d');
 
-// --- State ---
-let ship = { x: 180, y: 550, w: 40, h: 40 };
-let obstacles = [];
-let score = 0;
-let keys = {};
+    // --- State ---
+    // Player ship position and dimensions (starts near bottom center)
+    let ship = { x: 180, y: 550, w: 40, h: 40 };
+    // Array to hold all active obstacle objects
+    let obstacles = [];
+    // Array to hold all active bullet objects
+    let bullets = [];
+    // Current score
+    let score = 0;
+    // Flag to stop the game loop when the player dies
+    let gameOver = false;
+    // Object tracking which keys are currently held down
+    let keys = {};
+    // Frames to wait before the next shot (prevents machine-gunning)
+    let fireCooldown = 0;
 
-// --- Input ---
-addEventListener('keydown', e => keys[e.key] = true);
-addEventListener('keyup',   e => keys[e.key] = false);
+    // Obstacle type definitions: each has a size, hit points, color, and point value
+    // Smaller = more HP and more points (harder to kill, more rewarding)
+    const TYPES = [
+      { size: 18, hp: 1, color: '#f80', points: 3 },  // Small, orange, 1 hit to destroy
+      { size: 28, hp: 2, color: '#f55', points: 2 },  // Medium, red, 2 hits
+      { size: 40, hp: 3, color: '#f22', points: 1 }   // Large, dark red, 3 hits
+    ];
 
-// --- Spawn obstacles ---
-function spawn() {
-  obstacles.push({
-    x: Math.random() * (c.width - 30),
-    y: -30,
-    size: 20 + Math.random() * 20,
-    speed: 2 + Math.random() * 3
-  });
-  setTimeout(spawn, 400 + Math.random() * 600);
-}
-spawn();
+    // --- Input ---
+    // Listen for key press: store key as true, prevent spacebar from scrolling the page
+    addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === ' ') e.preventDefault();
+    });
+    // Listen for key release: store key as false
+    addEventListener('keyup', e => keys[e.key] = false);
 
-// --- Collision check ---
-function hit(a, b) {
-  return a.x < b.x + b.size && a.x + a.w > b.x &&
-         a.y < b.y + b.size && a.y + a.h > b.y;
-}
+    // --- Spawn ---
+    // Recursively schedules new obstacles using setTimeout (300–800ms apart)
+    function spawn() {
+      if (gameOver) return; // Stop spawning when game is over
+      // Pick a random obstacle type from the TYPES array
+      const t = TYPES[Math.floor(Math.random() * TYPES.length)];
+      // Create and push a new obstacle object
+      obstacles.push({
+        x: Math.random() * (c.width - t.size),  // Random horizontal position (stays on screen)
+        y: -t.size,                              // Start just above the top of the canvas
+        size: t.size,                            // Width/height of the square
+        hp: t.hp,                                // Health points
+        color: t.color,                          // Fill color
+        points: t.points,                        // Score awarded when destroyed
+        speed: 1.5 + Math.random() * 2 + (t.size / 20) // Larger obstacles fall slightly faster
+      });
+      // Schedule the next spawn after a random delay (300–800ms)
+      setTimeout(spawn, 300 + Math.random() * 500);
+    }
+    spawn(); // Kick off the spawning chain
 
-// --- Game loop ---
-function loop() {
-  ctx.clearRect(0, 0, c.width, c.height);
-
-  // Move ship
-  if (keys['ArrowLeft'])  ship.x = Math.max(0, ship.x - 6);
-  if (keys['ArrowRight']) ship.x = Math.min(c.width - ship.w, ship.x + 6);
-
-  // Draw ship (simple triangle)
-  ctx.fillStyle = '#0f0';
-  ctx.beginPath();
-  ctx.moveTo(ship.x + ship.w/2, ship.y);
-  ctx.lineTo(ship.x, ship.y + ship.h);
-  ctx.lineTo(ship.x + ship.w, ship.y + ship.h);
-  ctx.fill();
-
-  // Update & draw obstacles
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    const o = obstacles[i];
-    o.y += o.speed;
-
-    ctx.fillStyle = '#f55';
-    ctx.fillRect(o.x, o.y, o.size, o.size);
-
-    // Collision → game over
-    if (hit(ship, o)) {
-      ctx.fillStyle = '#fff'; ctx.font = '24px monospace';
-      ctx.fillText('GAME OVER  Score: ' + score, 50, 280);
-      return; // stop loop
+    // --- Collision ---
+    // Axis-aligned bounding box (AABB) collision check between two rectangles
+    // `a` has {x, y, w, h}, `b` has {x, y, size} (square)
+    function hit(a, b) {
+      return a.x < b.x + b.size && a.x + a.w > b.x &&
+             a.y < b.y + b.size && a.y + a.h > b.y;
     }
 
-    // Score + remove off-screen
-    if (o.y > c.height) { score++; obstacles.splice(i, 1); }
-  }
+    // --- Game loop ---
+    // Main function called every frame (~60fps) via requestAnimationFrame
+    function loop() {
+      // Clear the entire canvas with black (simulates a new frame)
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, c.width, c.height);
 
-  // Score
-  ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-  ctx.fillText('Score: ' + score, 10, 24);
+      // --- Game Over screen ---
+      if (gameOver) {
+        // Draw "GAME OVER" text with final score
+        ctx.fillStyle = '#fff'; ctx.font = '22px monospace';
+        ctx.fillText('GAME OVER  Score: ' + score, 60, 280);
+        // Draw restart instruction
+        ctx.font = '14px monospace';
+        ctx.fillText('Press R to restart', 100, 310);
+        // Restart the page when R is pressed
+        if (keys['r'] || keys['R']) location.reload();
+        return; // Stop updating/drawing the rest of the game
+      }
 
-  requestAnimationFrame(loop);
-}
-loop();
-</script>
+      // --- Move ship ---
+      // Move ship left at 6px/frame if ArrowLeft is held, clamped to left edge
+      if (keys['ArrowLeft'])  ship.x = Math.max(0, ship.x - 6);
+      // Move ship right at 6px/frame if ArrowRight is held, clamped to right edge
+      if (keys['ArrowRight']) ship.x = Math.min(c.width - ship.w, ship.x + 6);
+
+      // --- Fire ---
+      // Decrement cooldown counter each frame
+      if (fireCooldown > 0) fireCooldown--;
+      // If spacebar is held and cooldown has elapsed, fire a bullet
+      if (keys[' '] && fireCooldown === 0) {
+        // Bullet spawns centered above the ship (3px half-width, 14px tall)
+        bullets.push({ x: ship.x + ship.w / 2 - 3, y: ship.y, w: 6, h: 14 });
+        fireCooldown = 12; // Reset cooldown: ~5 shots per second at 60fps
+      }
+
+      // --- Draw ship (triangle pointing up) ---
+      ctx.fillStyle = '#0f0'; // Green color
+      ctx.beginPath();
+      ctx.moveTo(ship.x + ship.w / 2, ship.y);        // Top center (nose)
+      ctx.lineTo(ship.x, ship.y + ship.h);            // Bottom left
+      ctx.lineTo(ship.x + ship.w, ship.y + ship.h);   // Bottom right
+      ctx.fill();
+
+      // --- Update & draw bullets ---
+      // Iterate in reverse so splicing doesn't skip elements
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.y -= 10; // Move bullet up 10px per frame
+        ctx.fillStyle = '#ff0'; // Yellow
+        ctx.fillRect(b.x, b.y, b.w, b.h); // Draw the bullet
+        // Remove bullet if it has left the top of the screen
+        if (b.y + b.h < 0) bullets.splice(i, 1);
+      }
+
+      // --- Update & draw obstacles ---
+      // Iterate in reverse for safe splicing
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        const o = obstacles[i];
+        o.y += o.speed; // Move obstacle downward
+
+        // Check if any bullet hit this obstacle
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (hit(b, o)) {
+            bullets.splice(j, 1); // Remove the bullet
+            o.hp--;               // Deal 1 damage
+            if (o.hp <= 0) {
+              score += o.points;      // Award points for destroying it
+              obstacles.splice(i, 1); // Remove the obstacle
+              break;                  // Stop checking other bullets for this obstacle
+            }
+          }
+        }
+        // Skip if this obstacle was just destroyed above
+        if (!obstacles[i]) continue;
+
+        // Draw the obstacle; flash white if it's been damaged (HP below max for its size)
+        ctx.fillStyle = o.hp < TYPES.find(t => t.size === o.size).hp ? '#fff' : o.color;
+        ctx.fillRect(o.x, o.y, o.size, o.size);
+
+        // Check if the ship collided with this obstacle
+        if (hit(ship, o)) { gameOver = true; } // End the game
+
+        // If obstacle fell off the bottom, award 1 point and remove it
+        <!-- if (o.y > c.height) { score++; obstacles.splice(i, 1); } -->
+		
+		// If obstacle fell off the bottom, just remove it
+		if (o.y > c.height) obstacles.splice(i, 1);
+      }
+
+      // --- Score display ---
+      ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+      ctx.fillText('Score: ' + score, 10, 24); // Draw score in top-left corner
+
+      // Schedule next frame
+      requestAnimationFrame(loop);
+    }
+    loop(); // Start the game loop
+  </script>
 </body>
 </html>   
